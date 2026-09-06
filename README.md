@@ -60,6 +60,21 @@ bootstrap is still accumulating. The negative results above are reported because
 they are informative — interaction priors and joint detection are the "obvious"
 approaches, and they break exactly where fighting is hardest.*
 
+### Read the benchmark as a data assessment
+
+Framed one way, the table above is model selection. Framed the way that
+matters, it is a measurement of a **data gap**: the two "smart" approaches —
+learned interaction priors and joint multi-person detection — fail precisely on
+entangled contact, because the data to learn entangled contact barely exists.
+Harmony4D is the best grappling ground truth available and contains roughly
+seven distinct captures (one subject-pair each) — a scale limitation we
+discovered during protocol design and pre-registered honestly (capture-level
+bootstrap, wide CIs) rather than papering over. The scarcity is the finding:
+the missing ingredient for models of embodied human contact is exactly the
+occlusion-heavy, body-on-body capture that is hardest to collect. The
+fine-tune on the roadmap completes this argument — a before/after number
+testing whether targeted contact data closes the gap this benchmark measures.
+
 ## Architecture
 
 ```
