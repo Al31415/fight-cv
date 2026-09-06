@@ -1,0 +1,267 @@
+# Fight-CV PRE-REGISTRATION — frozen evaluation & label-policy contract.
+#
+# Authored BEFORE any model is run against reference data (roadmap v4, Appendix).
+# Two-stage freeze:
+#   frozen_policy   — all numeric decisions we control now (this commit).
+#   frozen_manifest — exact Harmony4D sequences/cameras/subject splits; populated
+#                     ONCE in Phase 0a from the downloaded subset, then the whole
+#                     file is re-hashed. Phase 1 evaluation is BLOCKED until both
+#                     blocks are frozen and `freeze_prereg.py` has recorded a
+#                     sha256 in PREREG.sha256.json.
+# Correction protocol: a genuine mistake -> record results already seen, bump
+# `version`, define the correction, re-evaluate on a NEW untouched holdout; the
+# original run stays in the audit trail. Never silently edit a frozen value.
+
+version: "1.3.1"
+ontology_version: "1.0.0"
+authored_utc: "2026-08-17"
+status: "frozen"   # policy + manifest resolved; re-hash on every change
+
+# Correction-protocol changelog (pre-RESULTS refinements only; no eval run yet):
+#  1.0.0 (2026-08-17) policy frozen, manifest pending.
+#  1.1.0 (2026-08-17) 0a-probe revealed Harmony4D has only ~7 distinct mma/grappling
+#        captures (one subject-pair each). Per user decision "on-distribution, honest
+#        wide CIs": (a) eval pool = ALL mma/grappling captures (base arms never train
+#        -> no leakage); (b) bootstrap unit sequence -> CAPTURE (primary, independent
+#        N~=7, wide CIs), camera-level within-capture = diagnostic only; (c) an
+#        INCONCLUSIVE gate outcome (point estimate passes but capture-CI too wide) is
+#        a valid, reported result distinct from FAIL. Manifest resolved (7 captures).
+#        No results have been observed at time of this change.
+#  1.2.0 (2026-08-17) 0a-probe of the actual GT: exo cams are OPENCV_FISHEYE with no
+#        shipped undistorted set. Added arm_input_preprocessing (deterministic
+#        fisheye->virtual-pinhole undistortion; GT projected through the same virtual
+#        pinhole for reprojection + z-buffer occlusion). GT layout confirmed:
+#        processed_data/{smpl,poses3d(COCO-17 world),poses2d,bbox}. Still pre-results.
+#  1.2.1 (2026-08-17) validated the reference chain on mma4 (eyeball-confirmed GT on
+#        fighters). COLMAP extrinsics are in a different frame than GT -> recover exo
+#        camera poses by PnP from GT correspondences (sub-pixel). Fixed undistort
+#        output_size to per-camera native (was wrongly 1408). Still pre-results.
+#  1.3.0 (2026-08-18) bridge endpoint refined per user spec BEFORE any bridge model
+#        was fit: joint round-SEQUENCE LPD scored at BOUT level, nested frozen stat
+#        vector (attempts + landed|attempts), frozen likelihood families, survival/
+#        finish component, rate-vs-finish decomposition, cluster-by-bout CIs,
+#        no mid-fight updating, time-at-risk offsets. No bridge results observed.
+#  1.3.1 (2026-08-21) Iteration-3 calibration correction protocol (Perez-Sousa,
+#        deliberate single-fight overfit as DIAGNOSTIC; does not touch the frozen
+#        bridge endpoint). Frozen BEFORE the classification sweep runs:
+#        (a) ontology: candidate -> committed attempt -> appears_landed ->
+#            is_significant; TD attempt vs landed; control = dominant grappling
+#            controller {A,B,neither}, phase-specific. UFCStats = measurement
+#            target downstream of this ontology, never the detector definition.
+#        (b) sweep objective weights FROZEN: wS=1.0 (sig att+land), wT=1.0
+#            (total att+land), wTD=1.0 (TD abs err att+land), wC=1.0
+#            (|ctrl-official|/300 per fighter-round), wA=0.5 (control-direction
+#            flips); count loss |log((Nhat+2)/(N+2))|, alpha=2. calib_table.W.
+#        (c) candidate bank FROZEN before sweep (emitter permissive, raw
+#            vx/vy/vz, lambda_z applied only downstream in strike_classify).
+#        (d) held-out bank-recall segment frozen by rng(42): r3 8.2-53.2s
+#            (heldout_recall_segment.json); labels untouched until bank freeze.
+#        (e) identity_map.json frozen from visual adjudication BEFORE any tuning
+#            (r1/r2 F0=Perez; r3 F0=Sousa). Iteration-2 results already observed
+#        are recorded in checkpoint2/3 artifacts as the audit trail.
+
+# ─────────────────────────────────────────────────────────────────────────────
+frozen_policy:
+
+  # ---- Phase 1 pose benchmark ------------------------------------------------
+  pose_benchmark:
+    arms: [comotion, hmr2_base, buddi_released]     # released BUDDI (BEV+ViTPose init) as-is
+    isolation_runs: [pose_only, end_to_end]         # pose_only = reference boxes+ids; e2e = SAM2 stack
+    joint_set: "COCO-17"
+    smpl_to_coco: "J_regressor_coco (standard HMR2/4DH regressor) + documented name map; SMPL-X->COCO via same regressor on body joints only"
+    root_joint: "pelvis = midpoint(coco_left_hip[11], coco_right_hip[12])"
+
+    camera_policy:
+      # Each Harmony4D camera is run as an INDEPENDENT single-camera pass. The gate
+      # aggregates the MEAN across all cameras (no eval-camera cherry-picking).
+      mode: "each_camera_independent__mean_across_cameras"
+
+    frame_sampling:
+      stride: 5                    # evaluate every 5th reference frame
+      exclude_boundary_s: 0.5      # drop first/last 0.5s of each sequence
+      require_min_fighters_with_reference: 2
+      missing_prediction: "counted in miss_rate; excluded from MPJPE mean; NEVER silently dropped"
+
+    arm_input_preprocessing:
+      # Harmony4D exo cams are OPENCV_FISHEYE (1408x1408); no undistorted set is
+      # shipped. Pose arms (trained on ~pinhole imagery) are fed an undistorted
+      # PINHOLE view, and GT 3D is projected through the SAME virtual pinhole for
+      # reprojection + z-buffer occlusion. Fully deterministic.
+      undistort: "cv2.fisheye.initUndistortRectifyMap from COLMAP OPENCV_FISHEYE (fx,fy,cx,cy,k1..k4)"
+      virtual_pinhole_K: "cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(balance chosen per-cam so the GT bbox stays in-frame; default balance for center-facing cams)"
+      output_size: "per-camera NATIVE (w,h) from cameras.txt (varies, e.g. 3840x2160); not a fixed size"
+      applies_to: "all evaluated exo cameras; ego/Aria + mobile cams excluded"
+    extrinsics_source:
+      # COLMAP images.txt extrinsics are in the reconstruction frame, which differs
+      # from the GT/SMPL-joint frame (verified: raw COLMAP projection misses by >1000px).
+      # Recover each STATIC exo camera pose by PnP from GT 3D<->2D correspondences
+      # (smpl['joints'] (45,3) vs poses2d (45,2)); verified sub-pixel (0.2-0.8px,
+      # 100% RANSAC inliers). Reference calibration only; not model evaluation.
+      method: "solvePnPRansac on GT smpl-joints vs poses2d, per capture, cached per cam"
+
+    occlusion_definition:
+      method: "reference_mesh_zbuffer"   # EXTERNAL — not any model's self-estimate
+      rule: "a reference joint is OCCLUDED for camera c iff its ray to c is blocked by the OTHER fighter's reference mesh (depth test, epsilon=0.02m); else VISIBLE"
+
+    metrics:
+      primary: "occluded_joint_root_relative_MPJPE_mm"
+      alignment: "root_relative (translate pelvis->0); NO Procrustes; NO scale align for the GATE"
+      also_report_global: true     # global (camera-frame absolute) MPJPE reported, not gated
+      secondary_reported: [visible_joint_root_relative_MPJPE_mm, global_MPJPE_mm,
+                           id_switches_per_1000fr, top_bottom_order_accuracy,
+                           miss_rate, reprojection_px, interpenetration_rate, temporal_jitter_mm]
+      diagnostics_only: [reprojection_px, interpenetration_rate, temporal_jitter_mm]  # BUDDI optimizes these; not gate
+
+    bootstrap:
+      unit: "capture"              # primary independent unit = distinct capture/subject-pair (~7); NEVER frame
+      secondary_diagnostic_unit: "capture_x_camera"   # viewpoint variance ONLY; not the gate CI (pseudo-replication)
+      independent_N_note: "only ~7 mma/grappling captures exist; capture-level CIs are WIDE by construction"
+      inconclusive_is_valid: true  # point-estimate passes but capture-CI too wide -> INCONCLUSIVE, reported, != FAIL
+      repetitions: 10000
+      confidence_level: 0.95
+      seed: 20260817
+
+    # ---- FROZEN PASS GATE (candidate arm vs CoMotion baseline) ----
+    gate:
+      primary:
+        metric: "occluded_joint_root_relative_MPJPE_mm"
+        min_relative_reduction: 0.25          # >=25% lower than CoMotion (point estimate)
+        min_ci_lower_relative_reduction: 0.10 # lower bound of 95% by-sequence CI >=10%
+      guardrails:
+        visible_joint_regression:
+          metric: "visible_joint_root_relative_MPJPE_mm"
+          max_relative_increase_ci_upper: 0.05   # upper 95% CI of relative change <= +5%
+        id_switch_noninferiority:
+          metric: "id_switches_per_1000fr (end_to_end run)"
+          margin_X: 0.5                           # upper 95% CI <= baseline + 0.5 switches/1000fr
+        top_bottom_noninferiority:
+          metric: "top_bottom_order_accuracy (frames where both pelvises reference-visible)"
+          reference: "derived from reference mesh + fitted mat plane (NON-circular; not our heuristic)"
+          margin_Y_pp: 3.0                        # lower bound of (arm - baseline) accuracy diff >= -0.03
+        miss_rate_noninferiority:
+          metric: "miss_rate"
+          max_increase_pp: 5.0                    # upper CI <= baseline + 5pp
+      downstream_position_semantics_in_gate: false   # no semantic labels -> NOT a gate criterion
+
+    fine_tuning:
+      base_arms: "NOT allowed"
+      harmony4d_reference_label_finetune: "fallback only; a SEPARATE versioned arm; trained on TRAIN subjects only; evaluated ONCE on TEST; never fine-tune on test post-gate"
+
+  # ---- Phase 1b broadcast sentinels (drift/smoke test, NOT validation) --------
+  sentinels:
+    grader: "automatable_proxies_only"
+    signals: [pose_detection_coverage, identity_fragmentation, reprojection_px,
+              temporal_instability, physical_invalidity_rate, abstention_rate_shift,
+              vlm_evidence_strength]
+    semantic_accuracy: "NOT measurable without broadcast labels; report as domain-drift signal only"
+
+  # ---- Phase 5 historical CV->UFC bridge (frozen now though executed later) ---
+  # v1.3.0 refinement (user spec, PRE-RESULTS): joint ROUND-SEQUENCE LPD, scored at
+  # the BOUT level (rounds are not independent samples).
+  bridge:
+    primary_endpoint: "paired improvement over ELO in held-out BOUT-level joint log predictive density of the complete first-UFC-fight round SEQUENCE: LPD_i = log p(Y_R1, survive_R1, Y_R2, survive_R2, Y_R3, finish | pre-fight priors); DeltaLPD_i = LPD_ELO+CV - LPD_ELO, averaged over held-out debut bouts"
+    round_stat_vector:      # FROZEN; nested to avoid redundancy (no total+sig double-count)
+      - sig_strike_attempts
+      - sig_strikes_landed_given_attempts
+      - takedown_attempts
+      - takedowns_completed_given_attempts
+      - control_time_share
+      - knockdowns
+      - survive_or_finish          # continue vs end this round
+      - finish_type_and_time       # where applicable
+    likelihood_families:    # FROZEN (no post-hoc family shopping)
+      attempts_counts: "Negative-Binomial with log time-at-risk offset"
+      landed_given_attempts: "Binomial (conditional on attempts)"
+      control_time_share: "Beta (on share of round time at risk)"
+      knockdowns: "Poisson with log time-at-risk offset"
+      survival: "discrete-time per-round hazard; finish type multinomial (KO/TKO, SUB, other) x within-round time"
+    scoring_rules:
+      unit: "BOUT (fighter's debut) — one joint LPD per bout; never round-as-independent-sample"
+      ci: "bootstrap clustered by bout"
+      decomposition: "report performance-rate component (stats given exposure) and survival/finish component separately; sum = joint score"
+      no_midfight_updating: "the PRE-DEBUT prior predicts the whole sequence; no per-round posterior updates in the primary test (that would test the online filter, not CV)"
+      early_finish: "missing later rounds are an OUTCOME (survival component), not missing data"
+      exposure: "time-at-risk offsets everywhere; raw totals never compared across unequal round lengths"
+      opponent_coherence: "model the bout coherently (one fighter's landed = other's absorbed); MVP conditions the debutant side on opponent identity/rates, full bivariate scoring is an allowed refinement pre-results"
+      ontology_crosswalk: "documented Fight-CV ontology <-> UFCStats definitions (required artifact)"
+    secondary_endpoint: [debut_win_logloss, debut_win_brier, individual_prop_like_stats]
+    nested_cv:
+      outer: "chronological expanding-window by debut date"
+      inner: "fighter-held-out (grouped) for hyperparameters"
+    ablation_ladder:
+      - elo_only
+      - elo_plus_reference_supported_direct_cv
+      - elo_plus_direct_cv_plus_weak_semantic
+      - elo_plus_broadcast_quality_missingness_only   # mandatory footage-quality control
+      - elo_plus_shuffled_cv_control                  # negative control
+    min_lift:
+      metric: "mean held-out LPD improvement over elo_only (nats per round-stat component)"
+      threshold: 0.02
+      ci_rule: "fighter-block bootstrap 95% CI lower bound > 0"
+    leakage_rules:
+      count_calibration: "fold-local ONLY; later UFC stats NEVER weak-label earlier regional footage"
+      round_count_constraint: "applies only on the SAME UFC video it was measured from"
+
+  # ---- Phase 0b power requirement (gates the whole bridge) --------------------
+  power_requirement:
+    target_power: 0.80
+    alpha: 0.05
+    detect_effect: "min_lift (0.02 nats) at the round-stat-component level"
+    min_independent_debut_fighters: 150    # < this after grouping => bridge declared UNDERPOWERED, stop
+    note: "variance/effect refined empirically in 0b, but the >=150 independent-fighter requirement is frozen now"
+
+  # ---- Deterministic footage selection (historical cohort + 43 targets) ------
+  video_selection_rule:
+    per_fighter: "the LATEST TWO complete pre-debut bouts strictly before the UFC debut date with full-bout footage available"
+    fewer_than_two: "take all available"
+    more_than_two: "take the two closest in time before debut"
+    min_usable_footage_s: 60
+    forbidden: [highlight_reels, clips_selected_after_inspecting_UFC_outcomes,
+                using_broadcast_availability_as_an_implicit_quality_signal]
+    availability_recorded_as_covariate: true   # feeds elo_plus_broadcast_quality_missingness_only
+
+  # ---- Label policy (Appendix B, machine-readable) ---------------------------
+  label_policy:
+    fused_weak_output_name: "soft_label_score"   # a.k.a weak_posterior; NOT a calibrated probability
+    auto_accepted_requires: ["validated_acceptance_policy", "OR strong external anchor (e.g. official submission finish)"]
+    unreferenced_vlm_or_geometry: "stays review_status=candidate regardless of agreement strength"
+    recall:
+      random_nonproposal_windows: "search for missed events; NOT a recall estimate by themselves"
+      true_proposal_recall_measured_on: "public temporally-labeled datasets"
+      regional_broadcast_result_name: "missed_event_audit_signal"
+    weak_source_isolation:
+      visual_vlm: "anonymized clips only (no transcript / outcome / fighter name)"
+      transcript_model: "text only"
+      geometry_model: "pose/masks only"
+      audio_model: "audio only"
+      note: "a VLM shown pixels+commentary+official-method is NOT an independent source"
+    replay_handling:
+      match: "live/replay matching -> ONE authoritative event id"
+      replay_frames: "supporting evidence only; NO authoritative counts from replay content"
+    pseudo_label_feedback_guard:
+      factory_versioning: [frozen_base_labeling_functions, weak_labels_v0, student_model_v1, eval_on_untouched_refs]
+      rule: "the student CANNOT be re-added as an independent source on its own training data"
+      relabeling: "creates a new dataset version + new held-out split; keep raw source outputs permanently"
+
+# ─────────────────────────────────────────────────────────────────────────────
+frozen_manifest:
+  status: "RESOLVED"
+  source_repo: "Jyun-Ting/Harmony4D (HF dataset, public/non-gated)"
+  harmony4d_sequence_selection_rule: "ALL zips whose activity name contains 'grappl' or 'mma' (author-provided activity labels); no manual per-sequence picking"
+  cameras: "ALL exo cameras per capture (each run as an INDEPENDENT single-camera pass); ego/Aria cams excluded from the exo benchmark"
+  eval_pool_rule: "base arms (CoMotion/HMR2.0/BUDDI) never train -> evaluate on ALL mma/grappling captures; author train/test labels are used ONLY for the fine-tune fallback (canonical TEST = held-out, subject-disjoint)"
+  # 7 DISTINCT independent captures (bootstrap clusters). grappling2 & mma4 appear in
+  # both train/ and test/ as temporal splits of the SAME subject-pair -> counted ONCE.
+  resolved:
+    captures:            # bootstrap clusters (primary independent units)
+      - {id: grappling,  zips: ["train/02_grappling.zip"]}
+      - {id: grappling2, zips: ["train/03_grappling2.zip", "test/03_grappling2.zip"]}
+      - {id: mma,        zips: ["train/12_mma.zip"]}
+      - {id: mma2,       zips: ["train/13_mma2.zip"]}
+      - {id: mma3,       zips: ["train/14_mma3.zip"]}
+      - {id: mma4,       zips: ["train/15_mma4.zip", "test/15_mma4.zip"]}
+      - {id: mma5,       zips: ["test/16_mma5.zip"]}
+    n_independent_captures: 7
+    finetune_fallback_heldout: ["test/03_grappling2.zip", "test/15_mma4.zip", "test/16_mma5.zip"]
+    gt_layout: "processed_data/{smpl,poses3d,poses2d,bbox}/*.npy ; poses3d = per-subject dict {'ariaNN': (17,4) COCO-17 world}; colmap/workplace/{cameras,images,points3D}.txt = calibration"
+    subset_size_gb: 142.7

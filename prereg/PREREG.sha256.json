@@ -1,0 +1,46 @@
+{
+  "freezes": [
+    {
+      "sha256": "92ae8badd66964c24b5b36e66e3967f0172df063a15db4c186b6339a602c8aab",
+      "prereg_version": "1.0.0",
+      "status": "policy_frozen__manifest_pending",
+      "recorded_utc": "2026-08-18T03:01:40Z",
+      "git_rev": "8ddeb28"
+    },
+    {
+      "sha256": "12b50f432676a805742630358c5a42fdd4e1f163cb901b37459cc5d48c91fae0",
+      "prereg_version": "1.1.0",
+      "status": "frozen",
+      "recorded_utc": "2026-08-18T03:51:16Z",
+      "git_rev": "8ddeb28"
+    },
+    {
+      "sha256": "2296eab2a52a49be36532c4553e6084f01efd2505dd9e71b98c6fe80b8f9a88a",
+      "prereg_version": "1.2.0",
+      "status": "frozen",
+      "recorded_utc": "2026-08-18T03:58:47Z",
+      "git_rev": "8ddeb28"
+    },
+    {
+      "sha256": "75a851fb8c5bc954fc589971c7829dba18c5f70463567823e838bd4cbdf4893a",
+      "prereg_version": "1.2.1",
+      "status": "frozen",
+      "recorded_utc": "2026-08-18T05:12:54Z",
+      "git_rev": "8ddeb28"
+    },
+    {
+      "sha256": "919e0fe4e8641b572b718f60cb78ee802a53dab782b76b27a5961d4388802cec",
+      "prereg_version": "1.3.0",
+      "status": "frozen",
+      "recorded_utc": "2026-08-18T18:25:55Z",
+      "git_rev": "8ddeb28"
+    },
+    {
+      "sha256": "40f699a68680a3988cbc58b3afdfd87d59625183ee4422381109fc46ab90170d",
+      "prereg_version": "1.3.1",
+      "status": "frozen",
+      "recorded_utc": "2026-08-21T20:42:32Z",
+      "git_rev": "8ddeb28"
+    }
+  ]
+}

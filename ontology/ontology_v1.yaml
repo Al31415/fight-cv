@@ -1,0 +1,58 @@
+# Fight-CV event ontology — FROZEN data dictionary.
+# Version is immutable once annotation begins; bump `version` for any change and
+# re-freeze. Every emitted event/effect/state row records this `version` string
+# in its `ontology_version` field. Definitions live in ONTOLOGY.md and MUST be
+# mutually exclusive. Do NOT collapse attempt+result into separate atomic events
+# (avoids attempt/landed double-counting) and do NOT store subjective damage as a
+# label — damage/momentum/fatigue are latent interpretations modeled downstream.
+
+version: "1.0.0"
+
+# ── Attempt events: ONE event per attempt, carrying an action-specific result ──
+attempt_events:
+  strike:
+    subtypes: [jab, cross, hook, uppercut, overhand, elbow, low_kick, body_kick,
+               head_kick, front_kick, knee, spinning_strike, ground_strike, other_strike]
+    results: [landed, blocked, missed, unknown]
+  takedown:
+    subtypes: [double_leg, single_leg, trip, throw, slam, drag, other_takedown]
+    results: [completed, stuffed, failed, abandoned, unknown]
+  submission:
+    subtypes: [rear_naked, guillotine, armbar, triangle, kimura, americana,
+               kneebar, heel_hook, dArce, anaconda, other_submission]
+    results: [secured, defended, escaped, abandoned, unknown]
+
+# ── Effects: measured observable consequences, NOT judgments. Optionally link to
+#    the attempt that caused them via source_event_id. ─────────────────────────
+effects:
+  types: [knockdown, stumble, posture_break, cut, head_displacement, visible_wobble]
+  # head_displacement / visible_wobble carry a numeric magnitude where measurable.
+
+# ── Interval state (phase): mutually-exclusive at any instant. ────────────────
+phase:
+  states: [standing, clinch, ground, transition, break, unknown]
+  ground_positions: [guard, half_guard, side_control, mount, back, turtle, sprawl,
+                     scramble, other_ground, na]
+  control: [none, top_control, back_control, clinch_control, unknown]
+
+# ── Observability — attached to every event/effect. ───────────────────────────
+observability:
+  visibility: [clear, partial, occluded, off_camera]
+  # annotation_confidence: float in [0,1]; annotator_id: str; ontology_version: str
+
+# ── Broadcast / shot state (Stage 00). ────────────────────────────────────────
+shot_state:
+  content: [live, replay, slow_motion, picture_in_picture, graphic, crowd,
+            corner, walkout, replay_review, other]
+
+# ── Interpretations: LATENT, modeled downstream with uncertainty. Never a raw
+#    annotation label. Listed for schema completeness only. ────────────────────
+interpretations:
+  latent: [damage, momentum, fatigue]
+  # fatigue is stored ONLY as phase-conditioned proxies (movement/output decay,
+  # guard-recovery latency, posture), never claimed as a unique fatigue measure.
+
+# ── Review status — provenance of every catalogued row. ───────────────────────
+review_status: [raw, candidate, auto_accepted, human_adjudicated, rejected]
+abstention_reasons: [low_confidence, occluded, off_camera, ambiguous_identity,
+                     out_of_ontology, insufficient_evidence]
