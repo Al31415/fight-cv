@@ -5,7 +5,7 @@ This is a public demo slice of a larger private research system, built in under 
 
 ![Fight-CV highlights](media/highlights.gif)
 
-**▶ [Full demo — 48 s, 1080p mp4](media/fightcv_demo.mp4)** · [YouTube mirror (unlisted)](https://ADD-UNLISTED-LINK-HERE)
+**▶ [Full demo — 48 s, 1080p mp4](media/fightcv_demo.mp4)** · [YouTube mirror (unlisted)](https://youtu.be/tjTKaCFnccE)
 
 ## What you're watching
 
