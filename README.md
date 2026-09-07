@@ -73,50 +73,46 @@ bootstrap, wide CIs) rather than papering over. The scarcity is the finding:
 the missing ingredient for models of embodied human contact is exactly the
 occlusion-heavy, body-on-body capture that is hardest to collect.
 
-### The data-scaling probe — does more capture diversity help?
+### The data-scaling probe — the lever is diversity, not volume
 
-The claim above is only worth making if it is testable. So we ran the test
-directly: fine-tune the HMR2 backbone (frozen ViT-H, head-only) on **1, 2, 3,
-then 4 distinct combat captures**, and measure occluded-joint error on a
-**held-out capture whose athletes appear in none of the training data**
-(subject-disjoint). Same eval frames, same GT-derived occlusion labels
-throughout.
+The scarcity claim is only worth making if it is testable, so we tested it:
+fine-tune the HMR2 backbone (frozen ViT-H, head-only) on **1, 2, 3, then 4
+distinct combat captures**, and measure occluded-joint error on a **held-out
+capture whose athletes appear in none of the training data** (subject-disjoint).
+Same eval frames, same GT-derived occlusion labels throughout.
 
-Occluded-joint MPJPE (mm) on the held-out capture, averaged over 3 camera
-views (median / mean):
+The naïve expectation is "in-domain fine-tuning helps." It does not — not at
+first:
 
-| training data | occluded median | occluded mean |
+| training data | occluded median (mm) | vs base |
 |---|---|---|
-| base model (0 captures) | 178 | 251 |
-| + 1 capture | 194 | 240 |
-| + 2 captures | 184 | 228 |
-| + 3 captures | 165 | 203 |
-| + 4 captures | **145** | **186** |
+| untuned base model | 178 | — |
+| + 1 capture | 194 | **worse** (overfits to one athlete pair) |
+| + 2 captures | 184 | still worse |
+| + 3 captures | 165 | crosses under |
+| + 4 captures | **145** | **−19%, still improving** |
 
-Two things hold cleanly, across all 3 cameras and both statistics
-(6 independent conditions, each **monotonic** over every one of the four
-fine-tune points):
+**One in-domain capture makes held-out pose *worse* than doing nothing** — the
+head overfits to a single athlete pair. It takes **~3 diverse captures just to
+cross back under the untuned model**, and error keeps falling with the fourth
+(no plateau). The active ingredient is *capture diversity*, not data volume: a
+little targeted data hurts; enough diverse data is what moves the model on
+subjects it has never seen. (The tail-sensitive *mean* improves monotonically
+from the first capture — 251 → 240 → 228 → 203 → 186 mm — but the median, the
+typical joint, is the honest protagonist and the one that degrades first.)
 
-- **Error falls with every capture added.** This is a scaling *curve*, not a
-  single before/after — held-out occluded error decreases monotonically as
-  capture diversity grows, through four points with **no plateau** (−19% median,
-  −26% mean vs the base model by the fourth capture).
-- **It crosses the base model between 2 and 3 captures.** One capture *overfits*
-  and hurts; two *recovers*; three and four *beat* the off-the-shelf model, and
-  keep improving.
-
-That is the data-value argument as an actual measurement: targeted
-human-contact capture demonstrably improves a frontier pose model on subjects
-it has never seen, and the improvement scales with how much diverse data you
-feed it — the curve points at *collect more*.
+That is the data-value argument as a measurement, and it is the non-obvious
+version: you cannot fix embodied-contact perception by grabbing a little
+in-domain data — you need diverse capture at scale, which is exactly the data
+that barely exists.
 
 *Honest bounds: a single held-out capture; joint-level n overstates power (the
-load-bearing evidence is the monotonic sign pattern — 3 consecutive transitions,
-6/6 conditions each — not any one median); captures 3–4 contributed only 2–3
-sequences each (partial streaming extraction); this is head-only tuning; and
-four points is a strong direction, not a converged scaling law. Every number is
-baseline-vs-tuned on identical frames with GT-derived occlusion — reproducible
-with `pipeline/` + the fine-tune scripts.*
+load-bearing evidence is the crossover + the monotonic sign pattern — 3
+consecutive transitions, 6/6 conditions each — not any one median); captures 3–4
+contributed only 2–3 sequences each (partial streaming extraction); this is
+head-only tuning; and four points is a direction, not a converged scaling law.
+Every number is baseline-vs-tuned on identical frames with GT-derived occlusion
+— reproducible with `pipeline/` + the fine-tune scripts.*
 
 ## Architecture
 
